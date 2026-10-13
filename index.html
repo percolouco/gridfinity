@@ -72,8 +72,10 @@ button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-col
     <label>Nom<input id="sl" type="text"></label>
     <label>Couleur<input id="sc" type="color"></label>
     <label>Bac plein<input id="ss" type="checkbox"></label>
-    <label>Compartiments (col × lig)<span><input id="scx" type="number" min="1" max="20" style="width:52px"> × <input id="scy" type="number" min="1" max="20" style="width:52px"></span></label>
-    <div class="row"><button id="perCell">Un compartiment par case</button><button id="noDiv">Sans cloison</button></div>
+    <div style="margin-top:8px;font-weight:600">Compartiments</div>
+    <div style="font-size:12px;color:var(--mute)">Clique sur un trait entre deux cases pour poser/retirer une cloison. Clique sur un triangle du bord pour toute la ligne.</div>
+    <canvas id="cedit" style="width:100%;height:200px;margin-top:6px;touch-action:none"></canvas>
+    <div class="row"><button id="perCell">Une par case</button><button id="noDiv">Aucune cloison</button></div>
     </div>
   </fieldset>
   <fieldset><legend>Export STL</legend>

@@ -29,7 +29,7 @@ function findSpot(w, d) {
   return null;
 }
 function newBinFromForm() {
-  return { id: st.next++, w: +$('bw').value || 1, d: +$('bd').value || 1, h: +$('bh').value || 1, label: $('bl').value.trim(), color: $('bc').value, solid: $('bs').checked, cx: 1, cy: 1, x: 0, y: 0 };
+  return { id: st.next++, w: +$('bw').value || 1, d: +$('bd').value || 1, h: +$('bh').value || 1, label: $('bl').value.trim(), color: $('bc').value, solid: $('bs').checked, vw: [], hw: [], x: 0, y: 0 };
 }
 function addBin() {
   const b = newBinFromForm();
@@ -49,7 +49,7 @@ function fillFree() {
 function rotateSel() {
   const b = st.sel; if (!b) return;
   const r = { ...b, w: b.d, d: b.w };
-  if (fits(r, b)) { b.w = r.w; b.d = r.d; [b.cx, b.cy] = [b.cy || 1, b.cx || 1]; refresh(); }
+  if (fits(r, b)) { b.w = r.w; b.d = r.d; b.vw = []; b.hw = []; refresh(); }
 }
 function dupSel() {
   const b = st.sel; if (!b) return;
@@ -87,11 +87,11 @@ function draw2d() {
     ctx.fillStyle = b.color; ctx.globalAlpha = b === st.sel ? 1 : 0.85;
     rr(x, y, w, d, Math.min(8, cell / 5)); ctx.fill(); ctx.globalAlpha = 1;
     ctx.lineWidth = b === st.sel ? 3 : 1; ctx.strokeStyle = b === st.sel ? css('--ink') : 'rgba(0,0,0,.35)'; ctx.stroke();
-    const cxn = b.cx || 1, cyn = b.cy || 1;
-    if (!b.solid && (cxn > 1 || cyn > 1)) {
-      ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 2; ctx.beginPath();
-      for (let k = 1; k < cxn; k++) { ctx.moveTo(x + (w * k) / cxn, y + 3); ctx.lineTo(x + (w * k) / cxn, y + d - 3); }
-      for (let k = 1; k < cyn; k++) { ctx.moveTo(x + 3, y + (d * k) / cyn); ctx.lineTo(x + w - 3, y + (d * k) / cyn); }
+    if (!b.solid && ((b.vw && b.vw.length) || (b.hw && b.hw.length))) {
+      ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3; ctx.beginPath();
+      const u = view.cell, ox0 = x - 1.5, oy0 = y - 1.5;
+      for (const k of b.vw) { const [wx, wy] = k.split(',').map(Number); ctx.moveTo(ox0 + wx * u, oy0 + wy * u); ctx.lineTo(ox0 + wx * u, oy0 + (wy + 1) * u); }
+      for (const k of b.hw) { const [wx, wy] = k.split(',').map(Number); ctx.moveTo(ox0 + wx * u, oy0 + wy * u); ctx.lineTo(ox0 + (wx + 1) * u, oy0 + wy * u); }
       ctx.stroke();
     }
     ctx.fillStyle = luminance(b.color) > 0.55 ? '#111' : '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -164,7 +164,7 @@ function size3d() {
 }
 function geo(mesh) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(mesh, 3)); g.computeVertexNormals(); return g; }
 const meshCache = new Map();
-function binMesh(b) { const k = `${b.w}|${b.d}|${b.h}|${b.solid ? 1 : 0}|${b.cx || 1}|${b.cy || 1}`; if (!meshCache.has(k)) meshCache.set(k, buildBin(b.w, b.d, b.h, { solid: b.solid, cx: b.cx || 1, cy: b.cy || 1 })); return meshCache.get(k); }
+function binMesh(b) { const k = `${b.w}|${b.d}|${b.h}|${b.solid ? 1 : 0}|${(b.vw || []).join(';')}|${(b.hw || []).join(';')}`; if (!meshCache.has(k)) meshCache.set(k, buildBin(b.w, b.d, b.h, { solid: b.solid, vw: b.vw || [], hw: b.hw || [] })); return meshCache.get(k); }
 function binPos(b) { return [(b.x + b.w / 2 - gridW() / 2) * GF.PITCH, -((b.y + b.d / 2) - gridD() / 2) * GF.PITCH]; }
 function rebuild3d() {
   if (!three) return; const g = three.group;
@@ -205,18 +205,19 @@ $('share').onclick = async () => {
 // ---------- UI ----------
 function syncInputs() { $('dw').value = st.dw; $('dd').value = st.dd; }
 function refresh(redraw = true) {
+  for (const q of st.bins) { q.vw = q.vw || []; q.hw = q.hw || []; }
   $('info').textContent = `Grille : ${gridW()} × ${gridD()} cases (${gridW() * GF.PITCH} × ${gridD() * GF.PITCH} mm), reste ${st.dw - gridW() * GF.PITCH} × ${st.dd - gridD() * GF.PITCH} mm`;
   const b = st.sel;
   $('nosel').hidden = !!b; $('seled').hidden = !b;
   if (b) {
     $('sw').value = b.w; $('sd').value = b.d; $('sh').value = b.h; $('sx').value = b.x; $('sy').value = b.y;
     if (document.activeElement !== $('sl')) $('sl').value = b.label;
-    $('sc').value = b.color; $('ss').checked = !!b.solid; $('scx').value = b.cx || 1; $('scy').value = b.cy || 1;
+    $('sc').value = b.color; $('ss').checked = !!b.solid; drawCedit();
   }
   const L = $('binlist'); L.innerHTML = '';
   for (const x of st.bins) {
     const row = document.createElement('div'); row.className = 'bi' + (x === b ? ' on' : '');
-    const comp = (x.cx || 1) * (x.cy || 1) > 1 && !x.solid ? ` · ${(x.cx || 1)}×${(x.cy || 1)} compart.` : '';
+    const nc = x.solid ? 1 : compCount(x); const comp = nc > 1 ? ` · ${nc} compart.` : '';
     row.innerHTML = `<i style="background:${x.color}"></i><span>${esc(x.label || 'Bac sans nom')} <small>${x.w}×${x.d}×${x.h}${comp}</small></span>`;
     const rm = document.createElement('button'); rm.textContent = '✕'; rm.title = 'Supprimer';
     rm.onclick = (e) => { e.stopPropagation(); st.bins = st.bins.filter((q) => q !== x); if (st.sel === x) st.sel = null; refresh(); };
@@ -233,15 +234,69 @@ function edit(patch) {
   const b = st.sel; if (!b) return;
   const c = { ...b, ...patch };
   if (!fits(c, b)) { alert('Ça ne rentre pas à cet endroit (hors grille ou chevauchement).'); refresh(); return; }
-  Object.assign(b, patch); refresh();
+  Object.assign(b, patch);
+  b.vw = (b.vw || []).filter((k) => { const [x, y] = k.split(',').map(Number); return x >= 1 && x < b.w && y < b.d; });
+  b.hw = (b.hw || []).filter((k) => { const [x, y] = k.split(',').map(Number); return y >= 1 && y < b.d && x < b.w; });
+  refresh();
 }
 const num = (id, min = 1) => Math.max(min, Math.floor(+$(id).value || min));
 $('sw').onchange = () => edit({ w: num('sw') }); $('sd').onchange = () => edit({ d: num('sd') }); $('sh').onchange = () => edit({ h: num('sh') });
 $('sx').onchange = () => edit({ x: num('sx', 0) }); $('sy').onchange = () => edit({ y: num('sy', 0) });
 $('ss').onchange = () => edit({ solid: $('ss').checked });
-$('scx').onchange = () => edit({ cx: num('scx') }); $('scy').onchange = () => edit({ cy: num('scy') });
-$('perCell').onclick = () => { if (st.sel) edit({ cx: st.sel.w, cy: st.sel.d, solid: false }); };
-$('noDiv').onclick = () => edit({ cx: 1, cy: 1 });
+$('perCell').onclick = () => { const b = st.sel; if (!b) return; b.solid = false; b.vw = []; b.hw = []; for (let x = 1; x < b.w; x++) for (let y = 0; y < b.d; y++) b.vw.push(`${x},${y}`); for (let y = 1; y < b.d; y++) for (let x = 0; x < b.w; x++) b.hw.push(`${x},${y}`); refresh(); };
+$('noDiv').onclick = () => { if (st.sel) { st.sel.vw = []; st.sel.hw = []; refresh(); } };
+
+// ---- éditeur de compartiments (grille d'unités du bac sélectionné) ----
+const ce = $('cedit'); let cg = null;
+function compCount(b) {
+  const seen = new Set(); let n = 0; const V = new Set(b.vw || []), H = new Set(b.hw || []);
+  for (let sx = 0; sx < b.w; sx++) for (let sy = 0; sy < b.d; sy++) {
+    if (seen.has(`${sx},${sy}`)) continue; n++; const q = [[sx, sy]]; seen.add(`${sx},${sy}`);
+    while (q.length) {
+      const [x, y] = q.pop();
+      const nb = [[x + 1, y, V.has(`${x + 1},${y}`)], [x - 1, y, V.has(`${x},${y}`)], [x, y + 1, H.has(`${x},${y + 1}`)], [x, y - 1, H.has(`${x},${y}`)]];
+      for (const [nx, ny, wall] of nb) if (!wall && nx >= 0 && ny >= 0 && nx < b.w && ny < b.d && !seen.has(`${nx},${ny}`)) { seen.add(`${nx},${ny}`); q.push([nx, ny]); }
+    }
+  }
+  return n;
+}
+function drawCedit() {
+  const b = st.sel; if (!b) return;
+  const W = ce.clientWidth, Hh = ce.clientHeight, dpr = devicePixelRatio || 1; if (!W) return;
+  ce.width = W * dpr; ce.height = Hh * dpr; const c = ce.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = 14, u = Math.min((W - pad * 2) / b.w, (Hh - pad * 2) / b.d), ox = (W - u * b.w) / 2, oy = (Hh - u * b.d) / 2;
+  cg = { u, ox, oy, pad };
+  c.fillStyle = b.color; c.globalAlpha = 0.25; c.fillRect(ox, oy, u * b.w, u * b.d); c.globalAlpha = 1;
+  c.strokeStyle = css('--line'); c.lineWidth = 1; c.beginPath();
+  for (let x = 0; x <= b.w; x++) { c.moveTo(ox + x * u, oy); c.lineTo(ox + x * u, oy + b.d * u); }
+  for (let y = 0; y <= b.d; y++) { c.moveTo(ox, oy + y * u); c.lineTo(ox + b.w * u, oy + y * u); }
+  c.stroke(); c.strokeStyle = css('--ink'); c.lineWidth = 2; c.strokeRect(ox, oy, u * b.w, u * b.d);
+  c.lineWidth = 4; c.beginPath();
+  for (const k of b.vw) { const [x, y] = k.split(',').map(Number); c.moveTo(ox + x * u, oy + y * u); c.lineTo(ox + x * u, oy + (y + 1) * u); }
+  for (const k of b.hw) { const [x, y] = k.split(',').map(Number); c.moveTo(ox + x * u, oy + y * u); c.lineTo(ox + (x + 1) * u, oy + y * u); }
+  c.stroke(); c.fillStyle = css('--mute');
+  for (let x = 1; x < b.w; x++) { c.beginPath(); c.moveTo(ox + x * u - 5, oy - 3); c.lineTo(ox + x * u + 5, oy - 3); c.lineTo(ox + x * u, oy + 5 - 3 + 4); c.fill(); }
+  for (let y = 1; y < b.d; y++) { c.beginPath(); c.moveTo(ox - 3, oy + y * u - 5); c.lineTo(ox - 3, oy + y * u + 5); c.lineTo(ox + 5 - 3 + 4, oy + y * u); c.fill(); }
+}
+function toggle(arr, key) { const i = arr.indexOf(key); if (i >= 0) arr.splice(i, 1); else arr.push(key); }
+ce.addEventListener('pointerdown', (ev) => {
+  const b = st.sel; if (!b || !cg) return; const r = ce.getBoundingClientRect();
+  const px = ev.clientX - r.left - cg.ox, py = ev.clientY - r.top - cg.oy, u = cg.u, tol = Math.max(8, u * 0.2);
+  const lx = Math.round(px / u), ly = Math.round(py / u); b.solid = false;
+  const inX = px > 0 && px < b.w * u, inY = py > 0 && py < b.d * u;
+  if (py < 2 && py > -cg.pad && lx >= 1 && lx < b.w && Math.abs(px - lx * u) < tol) {            // triangle haut : toute la ligne verticale
+    const keys = Array.from({ length: b.d }, (_, y) => `${lx},${y}`); const all = keys.every((k) => b.vw.includes(k));
+    b.vw = b.vw.filter((k) => !keys.includes(k)); if (!all) b.vw.push(...keys);
+  } else if (px < 2 && px > -cg.pad && ly >= 1 && ly < b.d && Math.abs(py - ly * u) < tol) {    // triangle gauche : toute la ligne horizontale
+    const keys = Array.from({ length: b.w }, (_, x) => `${x},${ly}`); const all = keys.every((k) => b.hw.includes(k));
+    b.hw = b.hw.filter((k) => !keys.includes(k)); if (!all) b.hw.push(...keys);
+  } else if (inX && inY && lx >= 1 && lx < b.w && Math.abs(px - lx * u) < tol && Math.abs(px - lx * u) <= Math.abs(py - ly * u) + (ly < 1 || ly >= b.d ? 1e9 : 0)) {
+    toggle(b.vw, `${lx},${Math.floor(py / u)}`);
+  } else if (inX && inY && ly >= 1 && ly < b.d && Math.abs(py - ly * u) < tol) {
+    toggle(b.hw, `${Math.floor(px / u)},${ly}`);
+  } else return;
+  refresh();
+});
 $('dw').onchange = $('dd').onchange = () => { st.dw = Math.max(42, +$('dw').value || 42); st.dd = Math.max(42, +$('dd').value || 42); st.bins = st.bins.filter((b) => fits(b, b)); st.sel = null; if (three) { fitCamera(); } refresh(); };
 $('add').onclick = addBin; $('fill').onclick = fillFree; $('rot').onclick = rotateSel; $('dup').onclick = dupSel; $('del').onclick = delSel;
 $('sl').oninput = () => { if (st.sel) { st.sel.label = $('sl').value; refresh(); } };
