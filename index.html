@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gridfinity Layout</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23f5a623'/%3E%3Cpath d='M8 8h7v7H8zM17 8h7v7h-7zM8 17h7v7H8zM17 17h7v7h-7z' fill='%23222'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#f4f5f7;--panel:#fff;--ink:#1d2330;--mute:#677084;--line:#d9dde5;--acc:#f5a623;--acc2:#d98b0a;--grid:#e3e6ec;--cell:#fafbfc}
+@media (prefers-color-scheme:dark){:root{--bg:#14171d;--panel:#1d222b;--ink:#e8ebf1;--mute:#97a0b3;--line:#303744;--grid:#2b323e;--cell:#222833}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0;margin-right:auto}
+main{flex:1;display:flex;min-height:0}
+aside{width:300px;overflow:auto;padding:12px;background:var(--panel);border-right:1px solid var(--line)}
+#stage{flex:1;position:relative;min-width:0}
+canvas#c2d,#c3d{position:absolute;inset:0;width:100%;height:100%}
+#c3d{display:none}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:8px 10px}
+legend{font-weight:600;padding:0 4px}
+label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:5px 0;color:var(--mute)}
+input[type=number],input[type=text],select{width:90px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+input[type=text]{width:130px}input[type=color]{width:46px;height:28px;border:1px solid var(--line);border-radius:6px;background:none;padding:0}
+button{padding:6px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);cursor:pointer;font:inherit}
+button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-color:var(--acc2);color:#1d1400;font-weight:600}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.seg button.on{background:var(--acc);color:#1d1400;border-color:var(--acc2)}
+#info{font-size:12px;color:var(--mute);margin:6px 0}
+#list{font-size:12px;color:var(--mute);margin:0;padding-left:16px}
+#hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--mute);background:var(--panel);padding:3px 8px;border-radius:6px;border:1px solid var(--line)}
+@media(max-width:760px){main{flex-direction:column}aside{width:100%;max-height:45vh;border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧱 Gridfinity Layout</h1>
+  <span class="seg"><button id="v2" class="on">Plan 2D</button><button id="v3">Vue 3D</button></span>
+  <button id="share">Copier le lien</button>
+  <button id="save">Enregistrer</button>
+  <button id="load">Ouvrir</button><input id="file" type="file" accept=".json" hidden>
+</header>
+<main>
+<aside>
+  <fieldset><legend>Tiroir / surface</legend>
+    <label>Largeur (mm)<input id="dw" type="number" min="42" step="1" value="420"></label>
+    <label>Profondeur (mm)<input id="dd" type="number" min="42" step="1" value="294"></label>
+    <div id="info"></div>
+  </fieldset>
+  <fieldset><legend>Nouveau bac</legend>
+    <label>Largeur (cases)<input id="bw" type="number" min="1" max="12" value="1"></label>
+    <label>Profondeur (cases)<input id="bd" type="number" min="1" max="12" value="1"></label>
+    <label>Hauteur (×7 mm)<input id="bh" type="number" min="1" max="30" value="3"></label>
+    <label>Nom<input id="bl" type="text" placeholder="ex. Vis M3"></label>
+    <label>Couleur<input id="bc" type="color" value="#4f8cff"></label>
+    <label>Bac plein<input id="bs" type="checkbox"></label>
+    <div class="row"><button class="pri" id="add">Ajouter</button><button id="fill">Remplir le vide</button></div>
+  </fieldset>
+  <fieldset><legend>Bac sélectionné</legend>
+    <div class="row"><button id="rot">Pivoter (R)</button><button id="dup">Dupliquer</button><button id="del">Supprimer</button></div>
+    <label>Hauteur (×7 mm)<input id="sh" type="number" min="1" max="30" value="3"></label>
+    <label>Nom<input id="sl" type="text"></label>
+    <label>Couleur<input id="sc" type="color" value="#4f8cff"></label>
+  </fieldset>
+  <fieldset><legend>Export STL</legend>
+    <div class="row"><button id="xplate">Plaque de base</button><button id="xsel">Bac sélectionné</button><button id="xall">Tous les bacs</button></div>
+    <div id="info2" style="font-size:12px;color:var(--mute);margin-top:6px">Profil simplifié (sans lèvre d'empilage ni aimants). À vérifier sur une pièce test avant d'imprimer le tout.</div>
+  </fieldset>
+  <fieldset><legend>Liste</legend><ul id="list"></ul></fieldset>
+</aside>
+<div id="stage"><canvas id="c2d"></canvas><div id="c3d"></div><div id="hint">Glisser un bac pour le déplacer · R pivoter · Suppr supprimer · clic dans le vide pour poser un bac</div></div>
+</main>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
