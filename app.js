@@ -3,10 +3,12 @@ import { OrbitControls } from './vendor/OrbitControls.js';
 import { GF, buildBin, buildBaseplate, toSTL, translate } from './geometry.js';
 
 const $ = (id) => document.getElementById(id);
-const st = { dw: 420, dd: 294, bins: [], sel: null, next: 1 };
+const st = { dw: 420, dd: 294, bins: [], sel: null, next: 1, wall: 1.2, div: 1.2, floor: 0.75 };
+function applyThickness() { GF.WALL = st.wall; GF.DIV = st.div; GF.FLOOR = st.floor; meshCache.clear(); }
 const gridW = () => Math.max(1, Math.floor(st.dw / GF.PITCH));
 const gridD = () => Math.max(1, Math.floor(st.dd / GF.PITCH));
 
+const meshCache = new Map();
 // ---------- persistance ----------
 function save() { try { localStorage.setItem('gf-layout', JSON.stringify(st)); } catch (e) { /* ignore */ } }
 function restore() {
@@ -163,7 +165,6 @@ function size3d() {
   }
 }
 function geo(mesh) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(mesh, 3)); g.computeVertexNormals(); return g; }
-const meshCache = new Map();
 function binMesh(b) { const k = `${b.w}|${b.d}|${b.h}|${b.solid ? 1 : 0}|${(b.vw || []).join(';')}|${(b.hw || []).join(';')}`; if (!meshCache.has(k)) meshCache.set(k, buildBin(b.w, b.d, b.h, { solid: b.solid, vw: b.vw || [], hw: b.hw || [] })); return meshCache.get(k); }
 function binPos(b) { return [(b.x + b.w / 2 - gridW() / 2) * GF.PITCH, -((b.y + b.d / 2) - gridD() / 2) * GF.PITCH]; }
 function rebuild3d() {
@@ -203,7 +204,7 @@ $('share').onclick = async () => {
 };
 
 // ---------- UI ----------
-function syncInputs() { $('dw').value = st.dw; $('dd').value = st.dd; }
+function syncInputs() { $('dw').value = st.dw; $('dd').value = st.dd; $('pw').value = st.wall; $('pd').value = st.div; $('pf').value = st.floor; applyThickness(); }
 function refresh(redraw = true) {
   for (const q of st.bins) { q.vw = q.vw || []; q.hw = q.hw || []; }
   $('info').textContent = `Grille : ${gridW()} × ${gridD()} cases (${gridW() * GF.PITCH} × ${gridD() * GF.PITCH} mm), reste ${st.dw - gridW() * GF.PITCH} × ${st.dd - gridD() * GF.PITCH} mm`;
@@ -298,6 +299,8 @@ ce.addEventListener('pointerdown', (ev) => {
   refresh();
 });
 $('dw').onchange = $('dd').onchange = () => { st.dw = Math.max(42, +$('dw').value || 42); st.dd = Math.max(42, +$('dd').value || 42); st.bins = st.bins.filter((b) => fits(b, b)); st.sel = null; if (three) { fitCamera(); } refresh(); };
+const thick = (id, key, lo, hi) => () => { const v = Math.min(hi, Math.max(lo, +$(id).value || lo)); st[key] = v; $(id).value = v; applyThickness(); refresh(); };
+$('pw').onchange = thick('pw', 'wall', 0.4, 4); $('pd').onchange = thick('pd', 'div', 0.4, 4); $('pf').onchange = thick('pf', 'floor', 0.4, 5);
 $('add').onclick = addBin; $('fill').onclick = fillFree; $('rot').onclick = rotateSel; $('dup').onclick = dupSel; $('del').onclick = delSel;
 $('sl').oninput = () => { if (st.sel) { st.sel.label = $('sl').value; refresh(); } };
 $('sc').oninput = () => { if (st.sel) { st.sel.color = $('sc').value; refresh(); } };
