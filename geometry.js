@@ -14,6 +14,7 @@ export const GF = {
   FIT: 0.15,        // jeu radial de la plaque de base
   WALL: 1.2,
   FLOOR: 0.75,
+  DIV: 1.2,         // épaisseur des cloisons de compartiments
 };
 
 const SEG = 5;
@@ -78,6 +79,12 @@ function solidLoft(out, cx, cy, prof) {
   cap(out, outl[last], prof[last][0], true);
 }
 
+// Pavé droit fermé.
+function box(out, x0, y0, z0, x1, y1, z1) {
+  const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  cap(out, c, z0, false); cap(out, c, z1, true); strip(out, c, z0, c, z1);
+}
+
 // ---- Bac ----
 // w, d en cellules ; h en unités de 7 mm ; opts.solid : bac plein (sans cavité).
 // Le bac est centré en (0,0), posé sur z = 0.
@@ -111,6 +118,17 @@ export function buildBin(w, d, h, opts = {}) {
     strip(out, inner, zb, inner, H, true);
     annulus(out, outer, inner, H, true);
     annulus(out, outer, inner, zb, false);
+    // compartiments (« bento ») : cloisons internes régulières
+    const cx = Math.max(1, opts.cx | 0), cy = Math.max(1, opts.cy | 0);
+    const t = GF.DIV, wi = 2 * (hwO - WALL), di = 2 * (hdO - WALL), hiX = wi / 2 + 0.3, hiY = di / 2 + 0.3;
+    for (let k = 1; k < cx; k++) {
+      const x = -wi / 2 + k * ((wi - (cx - 1) * t) / cx + t) - t / 2;
+      box(out, x - t / 2, -hiY, zb, x + t / 2, hiY, H);
+    }
+    for (let k = 1; k < cy; k++) {
+      const y = -di / 2 + k * ((di - (cy - 1) * t) / cy + t) - t / 2;
+      box(out, -hiX, y - t / 2, zb, hiX, y + t / 2, H);
+    }
   }
   return out;
 }

@@ -29,7 +29,7 @@ function findSpot(w, d) {
   return null;
 }
 function newBinFromForm() {
-  return { id: st.next++, w: +$('bw').value || 1, d: +$('bd').value || 1, h: +$('bh').value || 1, label: $('bl').value.trim(), color: $('bc').value, solid: $('bs').checked, x: 0, y: 0 };
+  return { id: st.next++, w: +$('bw').value || 1, d: +$('bd').value || 1, h: +$('bh').value || 1, label: $('bl').value.trim(), color: $('bc').value, solid: $('bs').checked, cx: 1, cy: 1, x: 0, y: 0 };
 }
 function addBin() {
   const b = newBinFromForm();
@@ -49,7 +49,7 @@ function fillFree() {
 function rotateSel() {
   const b = st.sel; if (!b) return;
   const r = { ...b, w: b.d, d: b.w };
-  if (fits(r, b)) { b.w = r.w; b.d = r.d; refresh(); }
+  if (fits(r, b)) { b.w = r.w; b.d = r.d; [b.cx, b.cy] = [b.cy || 1, b.cx || 1]; refresh(); }
 }
 function dupSel() {
   const b = st.sel; if (!b) return;
@@ -87,6 +87,13 @@ function draw2d() {
     ctx.fillStyle = b.color; ctx.globalAlpha = b === st.sel ? 1 : 0.85;
     rr(x, y, w, d, Math.min(8, cell / 5)); ctx.fill(); ctx.globalAlpha = 1;
     ctx.lineWidth = b === st.sel ? 3 : 1; ctx.strokeStyle = b === st.sel ? css('--ink') : 'rgba(0,0,0,.35)'; ctx.stroke();
+    const cxn = b.cx || 1, cyn = b.cy || 1;
+    if (!b.solid && (cxn > 1 || cyn > 1)) {
+      ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let k = 1; k < cxn; k++) { ctx.moveTo(x + (w * k) / cxn, y + 3); ctx.lineTo(x + (w * k) / cxn, y + d - 3); }
+      for (let k = 1; k < cyn; k++) { ctx.moveTo(x + 3, y + (d * k) / cyn); ctx.lineTo(x + w - 3, y + (d * k) / cyn); }
+      ctx.stroke();
+    }
     ctx.fillStyle = luminance(b.color) > 0.55 ? '#111' : '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `600 ${Math.max(10, Math.min(14, cell / 4))}px system-ui`;
     ctx.fillText(`${b.w}×${b.d}×${b.h}`, x + w / 2, y + d / 2 - (b.label ? 8 : 0));
@@ -105,12 +112,13 @@ function binAt(cx, cy) { return st.bins.find((b) => cx >= b.x && cx < b.x + b.w 
 cv.addEventListener('pointerdown', (ev) => {
   const { cx, cy } = cellAt(ev); const b = binAt(cx, cy);
   if (b) { st.sel = b; drag = { b, dx: cx - b.x, dy: cy - b.y, moved: false }; cv.setPointerCapture(ev.pointerId); }
-  else {
-    st.sel = null;
-    const t = newBinFromForm(); const cand = { x: cx, y: cy, w: t.w, d: t.d };
-    if (cx >= 0 && cy >= 0 && fits(cand)) { Object.assign(t, cand); st.bins.push(t); st.sel = t; }
-  }
+  else st.sel = null;
   refresh(false);
+});
+cv.addEventListener('dblclick', (ev) => {
+  const { cx, cy } = cellAt(ev); if (binAt(cx, cy)) return;
+  const t = newBinFromForm(); const cand = { x: cx, y: cy, w: t.w, d: t.d };
+  if (cx >= 0 && cy >= 0 && fits(cand)) { Object.assign(t, cand); st.bins.push(t); st.sel = t; refresh(); }
 });
 cv.addEventListener('pointermove', (ev) => {
   if (!drag) return;
@@ -136,6 +144,16 @@ function init3d() {
   const dl = new THREE.DirectionalLight(0xffffff, 1.4); dl.position.set(200, -300, 500); scene.add(dl);
   const controls = new OrbitControls(camera, renderer.domElement);
   three = { renderer, scene, camera, controls, group: new THREE.Group() }; scene.add(three.group);
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+  renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects(three.group.children, false).find((h) => h.object.userData.bin);
+    st.sel = hit ? hit.object.userData.bin : null; refresh();
+  });
   (function loop() { requestAnimationFrame(loop); if ($('c3d').style.display !== 'none') { size3d(); controls.update(); renderer.render(scene, camera); } })();
 }
 function size3d() {
@@ -146,7 +164,7 @@ function size3d() {
 }
 function geo(mesh) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(mesh, 3)); g.computeVertexNormals(); return g; }
 const meshCache = new Map();
-function binMesh(b) { const k = `${b.w}|${b.d}|${b.h}|${b.solid ? 1 : 0}`; if (!meshCache.has(k)) meshCache.set(k, buildBin(b.w, b.d, b.h, { solid: b.solid })); return meshCache.get(k); }
+function binMesh(b) { const k = `${b.w}|${b.d}|${b.h}|${b.solid ? 1 : 0}|${b.cx || 1}|${b.cy || 1}`; if (!meshCache.has(k)) meshCache.set(k, buildBin(b.w, b.d, b.h, { solid: b.solid, cx: b.cx || 1, cy: b.cy || 1 })); return meshCache.get(k); }
 function binPos(b) { return [(b.x + b.w / 2 - gridW() / 2) * GF.PITCH, -((b.y + b.d / 2) - gridD() / 2) * GF.PITCH]; }
 function rebuild3d() {
   if (!three) return; const g = three.group;
@@ -155,7 +173,9 @@ function rebuild3d() {
   g.add(plate);
   for (const b of st.bins) {
     const m = new THREE.Mesh(geo(binMesh(b)), new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.55, side: THREE.DoubleSide }));
-    const [x, y] = binPos(b); m.position.set(x, y, GF.PLATE_FLOOR); g.add(m);
+    const [x, y] = binPos(b); m.position.set(x, y, GF.PLATE_FLOOR); m.userData.bin = b;
+    if (b === st.sel) { m.material.emissive = new THREE.Color(0xffffff); m.material.emissiveIntensity = 0.35; }
+    g.add(m);
   }
 }
 function fitCamera() {
@@ -186,16 +206,44 @@ $('share').onclick = async () => {
 function syncInputs() { $('dw').value = st.dw; $('dd').value = st.dd; }
 function refresh(redraw = true) {
   $('info').textContent = `Grille : ${gridW()} × ${gridD()} cases (${gridW() * GF.PITCH} × ${gridD() * GF.PITCH} mm), reste ${st.dw - gridW() * GF.PITCH} × ${st.dd - gridD() * GF.PITCH} mm`;
-  const b = st.sel; $('sh').value = b ? b.h : ''; $('sl').value = b ? b.label : ''; $('sc').value = b ? b.color : '#4f8cff';
-  $('list').innerHTML = '';
-  const groups = {}; for (const x of st.bins) { const k = `${x.w}×${x.d}×${x.h}`; groups[k] = (groups[k] || 0) + 1; }
-  for (const [k, n] of Object.entries(groups)) { const li = document.createElement('li'); li.textContent = `${n} × ${k}`; $('list').appendChild(li); }
-  const used = st.bins.reduce((a, x) => a + x.w * x.d, 0); const li = document.createElement('li'); li.textContent = `Occupation : ${used}/${gridW() * gridD()} cases`; $('list').appendChild(li);
+  const b = st.sel;
+  $('nosel').hidden = !!b; $('seled').hidden = !b;
+  if (b) {
+    $('sw').value = b.w; $('sd').value = b.d; $('sh').value = b.h; $('sx').value = b.x; $('sy').value = b.y;
+    if (document.activeElement !== $('sl')) $('sl').value = b.label;
+    $('sc').value = b.color; $('ss').checked = !!b.solid; $('scx').value = b.cx || 1; $('scy').value = b.cy || 1;
+  }
+  const L = $('binlist'); L.innerHTML = '';
+  for (const x of st.bins) {
+    const row = document.createElement('div'); row.className = 'bi' + (x === b ? ' on' : '');
+    const comp = (x.cx || 1) * (x.cy || 1) > 1 && !x.solid ? ` · ${(x.cx || 1)}×${(x.cy || 1)} compart.` : '';
+    row.innerHTML = `<i style="background:${x.color}"></i><span>${esc(x.label || 'Bac sans nom')} <small>${x.w}×${x.d}×${x.h}${comp}</small></span>`;
+    const rm = document.createElement('button'); rm.textContent = '✕'; rm.title = 'Supprimer';
+    rm.onclick = (e) => { e.stopPropagation(); st.bins = st.bins.filter((q) => q !== x); if (st.sel === x) st.sel = null; refresh(); };
+    row.appendChild(rm); row.onclick = () => { st.sel = x; refresh(); }; L.appendChild(row);
+  }
+  if (!st.bins.length) L.innerHTML = '<div style="font-size:12px;color:var(--mute)">Aucun bac pour l\'instant.</div>';
+  const used = st.bins.reduce((a, x) => a + x.w * x.d, 0);
+  $('info3').textContent = `${st.bins.length} bac(s) · occupation ${used}/${gridW() * gridD()} cases`;
   save(); if (mode === '3d') rebuild3d(); else draw2d();
 }
+function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// édition du bac sélectionné : valide l'état avant de l'appliquer
+function edit(patch) {
+  const b = st.sel; if (!b) return;
+  const c = { ...b, ...patch };
+  if (!fits(c, b)) { alert('Ça ne rentre pas à cet endroit (hors grille ou chevauchement).'); refresh(); return; }
+  Object.assign(b, patch); refresh();
+}
+const num = (id, min = 1) => Math.max(min, Math.floor(+$(id).value || min));
+$('sw').onchange = () => edit({ w: num('sw') }); $('sd').onchange = () => edit({ d: num('sd') }); $('sh').onchange = () => edit({ h: num('sh') });
+$('sx').onchange = () => edit({ x: num('sx', 0) }); $('sy').onchange = () => edit({ y: num('sy', 0) });
+$('ss').onchange = () => edit({ solid: $('ss').checked });
+$('scx').onchange = () => edit({ cx: num('scx') }); $('scy').onchange = () => edit({ cy: num('scy') });
+$('perCell').onclick = () => { if (st.sel) edit({ cx: st.sel.w, cy: st.sel.d, solid: false }); };
+$('noDiv').onclick = () => edit({ cx: 1, cy: 1 });
 $('dw').onchange = $('dd').onchange = () => { st.dw = Math.max(42, +$('dw').value || 42); st.dd = Math.max(42, +$('dd').value || 42); st.bins = st.bins.filter((b) => fits(b, b)); st.sel = null; if (three) { fitCamera(); } refresh(); };
 $('add').onclick = addBin; $('fill').onclick = fillFree; $('rot').onclick = rotateSel; $('dup').onclick = dupSel; $('del').onclick = delSel;
-$('sh').onchange = () => { if (st.sel) { st.sel.h = Math.max(1, +$('sh').value || 1); refresh(); } };
 $('sl').oninput = () => { if (st.sel) { st.sel.label = $('sl').value; refresh(); } };
 $('sc').oninput = () => { if (st.sel) { st.sel.color = $('sc').value; refresh(); } };
 $('v2').onclick = () => setMode('2d'); $('v3').onclick = () => setMode('3d');
