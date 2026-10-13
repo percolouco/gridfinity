@@ -48,6 +48,11 @@ button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-col
     <label>Profondeur (mm)<input id="dd" type="number" min="42" step="1" value="294"></label>
     <div id="info"></div>
   </fieldset>
+  <fieldset><legend>Réglages des parois</legend>
+    <label>Paroi extérieure (mm)<input id="pw" type="number" min="0.4" max="4" step="0.1" value="1.2"></label>
+    <label>Cloisons (mm)<input id="pd" type="number" min="0.4" max="4" step="0.1" value="1.2"></label>
+    <label>Fond du bac (mm)<input id="pf" type="number" min="0.4" max="5" step="0.05" value="0.75"></label>
+  </fieldset>
   <fieldset><legend>Nouveau bac</legend>
     <label>Largeur (cases)<input id="bw" type="number" min="1" max="12" value="1"></label>
     <label>Profondeur (cases)<input id="bd" type="number" min="1" max="12" value="1"></label>
