@@ -118,16 +118,28 @@ export function buildBin(w, d, h, opts = {}) {
     strip(out, inner, zb, inner, H, true);
     annulus(out, outer, inner, H, true);
     annulus(out, outer, inner, zb, false);
-    // compartiments (« bento ») : cloisons internes régulières
-    const cx = Math.max(1, opts.cx | 0), cy = Math.max(1, opts.cy | 0);
-    const t = GF.DIV, wi = 2 * (hwO - WALL), di = 2 * (hdO - WALL), hiX = wi / 2 + 0.3, hiY = di / 2 + 0.3;
-    for (let k = 1; k < cx; k++) {
-      const x = -wi / 2 + k * ((wi - (cx - 1) * t) / cx + t) - t / 2;
-      box(out, x - t / 2, -hiY, zb, x + t / 2, hiY, H);
+    // compartiments (« bento ») : cloisons posées sur les lignes de la grille d'unités.
+    // vw : "x,y" = cloison verticale sur la ligne x (1..w-1), à la rangée y ; hw : "x,y" = cloison horizontale sur la ligne y (1..d-1), à la colonne x.
+    const t = GF.DIV, ex = (w * PITCH) / 2, ey = (d * PITCH) / 2, inX = ex - CLEAR / 2 - WALL / 2, inY = ey - CLEAR / 2 - WALL / 2;
+    const set = (a) => new Set(a || []);
+    const V = set(opts.vw), Hh = set(opts.hw);
+    for (let x = 1; x < w; x++) {
+      for (let y = 0; y < d; y++) {
+        if (!V.has(`${x},${y}`) || V.has(`${x},${y - 1}`)) continue;     // début d'une série
+        let y2 = y; while (V.has(`${x},${y2 + 1}`)) y2++;                 // fin de la série
+        const px = -ex + x * PITCH;
+        const lo = y === 0 ? -ey + 0 : -ey + y * PITCH - t / 2, hi = y2 === d - 1 ? ey : -ey + (y2 + 1) * PITCH + t / 2;
+        box(out, px - t / 2, Math.max(lo, -inY), zb, px + t / 2, Math.min(hi, inY), H);
+      }
     }
-    for (let k = 1; k < cy; k++) {
-      const y = -di / 2 + k * ((di - (cy - 1) * t) / cy + t) - t / 2;
-      box(out, -hiX, y - t / 2, zb, hiX, y + t / 2, H);
+    for (let y = 1; y < d; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!Hh.has(`${x},${y}`) || Hh.has(`${x - 1},${y}`)) continue;
+        let x2 = x; while (Hh.has(`${x2 + 1},${y}`)) x2++;
+        const py = -ey + y * PITCH;
+        const lo = x === 0 ? -ex : -ex + x * PITCH - t / 2, hi = x2 === w - 1 ? ex : -ex + (x2 + 1) * PITCH + t / 2;
+        box(out, Math.max(lo, -inX), py - t / 2, zb, Math.min(hi, inX), py + t / 2, H);
+      }
     }
   }
   return out;
