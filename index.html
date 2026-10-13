@@ -13,9 +13,9 @@ body{margin:0;font:14px/1.4 system-ui,sans-serif;background:var(--bg);color:var(
 header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
 header h1{font-size:16px;margin:0;margin-right:auto}
 main{flex:1;display:flex;min-height:0}
-aside{width:300px;overflow:auto;padding:12px;background:var(--panel);border-right:1px solid var(--line)}
+aside{width:300px;overflow:auto;overflow-x:hidden;padding:12px;background:var(--panel);border-right:1px solid var(--line)}
 #stage{flex:1;position:relative;min-width:0}
-canvas#c2d,#c3d{position:absolute;inset:0;width:100%;height:100%}
+canvas#c2d,#c3d{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #c3d{display:none}
 fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:8px 10px}
 legend{font-weight:600;padding:0 4px}
@@ -28,6 +28,7 @@ button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-col
 .seg button.on{background:var(--acc);color:#1d1400;border-color:var(--acc2)}
 #info{font-size:12px;color:var(--mute);margin:6px 0}
 #list{font-size:12px;color:var(--mute);margin:0;padding-left:16px}
+#binlist{max-height:240px;overflow:auto;overflow-x:hidden}.bi span{min-width:0}.bi{display:flex;align-items:center;gap:8px;padding:5px 6px;border:1px solid transparent;border-radius:6px;cursor:pointer;font-size:13px}.bi:hover{border-color:var(--line)}.bi.on{background:color-mix(in srgb,var(--acc) 25%,transparent);border-color:var(--acc)}.bi i{width:14px;height:14px;border-radius:4px;flex:none;border:1px solid rgba(0,0,0,.3)}.bi span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bi small{color:var(--mute)}.bi button{padding:1px 6px}
 #hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--mute);background:var(--panel);padding:3px 8px;border-radius:6px;border:1px solid var(--line)}
 @media(max-width:760px){main{flex-direction:column}aside{width:100%;max-height:45vh;border-right:0;border-bottom:1px solid var(--line)}}
 </style>
@@ -56,19 +57,31 @@ button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-col
     <label>Bac plein<input id="bs" type="checkbox"></label>
     <div class="row"><button class="pri" id="add">Ajouter</button><button id="fill">Remplir le vide</button></div>
   </fieldset>
-  <fieldset><legend>Bac sélectionné</legend>
+  <fieldset><legend>Mes bacs</legend>
+    <div id="binlist"></div>
+    <div id="info3" style="font-size:12px;color:var(--mute);margin-top:6px"></div>
+  </fieldset>
+  <fieldset id="selbox"><legend>Bac sélectionné</legend>
+    <div id="nosel" style="font-size:12px;color:var(--mute)">Choisis un bac dans la liste, sur le plan ou dans la vue 3D.</div>
+    <div id="seled" hidden>
     <div class="row"><button id="rot">Pivoter (R)</button><button id="dup">Dupliquer</button><button id="del">Supprimer</button></div>
-    <label>Hauteur (×7 mm)<input id="sh" type="number" min="1" max="30" value="3"></label>
+    <label>Largeur (cases)<input id="sw" type="number" min="1" max="20"></label>
+    <label>Profondeur (cases)<input id="sd" type="number" min="1" max="20"></label>
+    <label>Hauteur (×7 mm)<input id="sh" type="number" min="1" max="30"></label>
+    <label>Position X / Y<span><input id="sx" type="number" min="0" style="width:52px"> <input id="sy" type="number" min="0" style="width:52px"></span></label>
     <label>Nom<input id="sl" type="text"></label>
-    <label>Couleur<input id="sc" type="color" value="#4f8cff"></label>
+    <label>Couleur<input id="sc" type="color"></label>
+    <label>Bac plein<input id="ss" type="checkbox"></label>
+    <label>Compartiments (col × lig)<span><input id="scx" type="number" min="1" max="20" style="width:52px"> × <input id="scy" type="number" min="1" max="20" style="width:52px"></span></label>
+    <div class="row"><button id="perCell">Un compartiment par case</button><button id="noDiv">Sans cloison</button></div>
+    </div>
   </fieldset>
   <fieldset><legend>Export STL</legend>
     <div class="row"><button id="xplate">Plaque de base</button><button id="xsel">Bac sélectionné</button><button id="xall">Tous les bacs</button></div>
     <div id="info2" style="font-size:12px;color:var(--mute);margin-top:6px">Profil simplifié (sans lèvre d'empilage ni aimants). À vérifier sur une pièce test avant d'imprimer le tout.</div>
   </fieldset>
-  <fieldset><legend>Liste</legend><ul id="list"></ul></fieldset>
 </aside>
-<div id="stage"><canvas id="c2d"></canvas><div id="c3d"></div><div id="hint">Glisser un bac pour le déplacer · R pivoter · Suppr supprimer · clic dans le vide pour poser un bac</div></div>
+<div id="stage"><canvas id="c2d"></canvas><div id="c3d"></div><div id="hint">Glisser un bac pour le déplacer · R pivoter · Suppr supprimer · double-clic dans le vide pour poser un bac</div></div>
 </main>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 <script type="module" src="app.js"></script>
